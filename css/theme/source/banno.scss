@@ -1,0 +1,32 @@
+// Default mixins and settings -----------------
+@import "../template/mixins";
+@import "../template/settings";
+// ---------------------------------------------
+
+
+// Override theme settings (see ../template/settings.scss)
+@mixin bodyBackground() {
+       background-image: url(../../img/banno_background_header.png);
+       background-size: 100%;
+}
+
+pre.src, pre.example {
+      background: rgba(0,0,0,0.5);
+      font-size: 0.9em;
+}
+
+$mainFont: 'Helvetica', sans-serif;
+
+$linkColor: #257ab0;
+$linkColorHover: lighten( $linkColor, 20% );
+
+$headingFont: 'Helvetica', sans-serif;
+$headingTextShadow: none;
+$headingLetterSpacing: -0.03em;
+$headingTextTransform: none;
+
+$mainFontSize: 32px;
+
+// Theme template ------------------------------
+@import "../template/theme";
+// ---------------------------------------------

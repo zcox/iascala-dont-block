@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+
+  <head>
+    <meta charset="utf-8">
+
+    <title>reveal.js - The HTML Presentation Framework</title>
+
+    <meta name="description" content="A framework for easily creating beautiful presentations using HTML">
+    <meta name="author" content="Hakim El Hattab">
+
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <link rel="stylesheet" href="css/reveal.min.css">
+    <link rel="stylesheet" href="css/theme/banno.css" id="theme">
+
+    <!-- For syntax highlighting -->
+    <link rel="stylesheet" href="lib/css/zenburn.css">
+
+    <!-- If the query includes 'print-pdf', use the PDF print sheet -->
+    <script>
+      document.write( '<link rel="stylesheet" href="css/print/' + ( window.location.search.match( /print-pdf/gi ) ? 'pdf' : 'paper' ) + '.css" type="text/css" media="print">' );
+    </script>
+
+    <!--[if lt IE 9]>
+    <script src="lib/js/html5shiv.js"></script>
+    <![endif]-->
+  </head>
+
+  <body>
+
+    <div class="reveal">
+      <div class="slides">
+
+        <section>
+          <h1>Don't Block</h1>
+          <h3>How to Mess Up Akka and Spray</h3>
+          <p>Zach Cox - @zcox - zach.cox@banno.com</p>
+          <p>iascala - Feb 2014</p>
+        </section>
+
+        <section>
+          <blockquote class="twitter-tweet" lang="en" align="center">
+            <p>Don ts block</p>&mdash; Horse ebooks (@Horse_ebooks) <a href="https://twitter.com/Horse_ebooks/statuses/364096530451410947">August 4, 2013</a>
+          </blockquote>
+          <script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### Purpose
+
+            * Scala provides great concurrency tools
+            * Very easy to mess up
+            * Demonstrate how blocking can prevent processing
+            * Provide solutions
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### Things We Will Block
+
+            * Threads (Java)
+            * Futures (Scala)
+            * Actors (Akka)
+            * Spray
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### Spoiler
+
+            All about blocking threads
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### What is Blocking?
+
+            * Code that takes a long time to run
+            * Network I/O
+              * HTTP requests
+              * Database access
+            * File I/O
+            * Really heavy computation
+            * __Nothing after the blocking function can run on this thread until it is done__
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### Java: `Runnable`, `Executor`
+
+            <pre><code data-trim class="scala">
+trait Runnable {
+  def run(): Unit
+}
+
+trait Executor {
+  def execute(command: Runnable): Unit
+}
+            </code></pre>
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### `ThreadPoolExecutor`
+
+            <pre><code data-trim class="scala">
+class ThreadPoolExecutor extends Executor {
+  val pool: Set[Thread] = Set.empty
+  val tasks: BlockingQueue[Runnable] = ???
+
+  def execute(command: Runnable): Unit = {
+    //run command on new thread, or queue it, or reject it, depending on settings...
+  }
+}
+            </code></pre>
+          </script>
+        </section>
+
+        <section data-markdown id="how-to-block-thread-pool-executor">
+          <script type="text/template">
+            ### How to block `ThreadPoolExecutor`
+
+            * Execute tasks that block in run() method
+            * All threads in pool get blocked
+            * Tasks are queued before execution (until queue is full)
+            * How it is supposed to work...
+            * Need to be aware of the blocking though
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### `ForkJoinPool`
+
+            * `ExecutorService` implementation
+            * `scala.concurrent.forkjoin`
+            * `java.util.concurrent` (Java7)
+            * Sub-dividing tasks, work queue, worker thread pool, work stealing, ...
+            * https://www.google.com/search?q=java+fork+join
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### How to block `ForkJoinPool`
+
+            * Same as [`ThreadPoolExecutor`](#/how-to-block-thread-pool-executor)
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### Solutions for Blocked `Executor`
+
+            <pre><code data-trim class="scala">
+val executor = Executors.newFixedThreadPool(moreThreads)
+            </code></pre>
+            <br/>
+            <pre><code data-trim class="scala">
+val executor1 = Executors.newFixedThreadPool(pool1Size)
+val executor2 = Executors.newFixedThreadPool(pool2Size)
+            </code></pre>
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### Java: `Callable`, `Future`, `ExecutorService`
+
+            <pre><code data-trim class="scala">
+trait Callable[V] {
+  def call(): V
+}
+
+trait Future[V] {
+  def isDone(): Boolean
+  def get(): V
+}
+
+trait ExecutorService extends Executor {
+  def submit(task: Runnable): Future[_]
+  def submit[T](task: Callable[T]): Future[T]
+}
+            </code></pre>
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ![](http://yuml.me/diagram/scruffy;dir:TB;/class/[Executor]^-[ExecutorService]) <!-- .element: border="0" -->
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### `Future[T]`
+
+            * Monad that eventually contains either:
+              * A value of type `T` (success)
+              * A `Throwable` (failure)
+            * `Future[T]` is the read-side; `Promise[T]` is the write-side
+            * Value is computed and placed into promise/future on some other thread (usually)
+
+            <pre><code data-trim class="scala">
+//TODO compelling example of Future...
+            </code></pre>
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### `ExecutionContext`
+
+            * Runs code that asynchronously completes futures
+            * Scala version of `Executor`/`ExecutorService`
+              * Implementations usually wrap one
+              * `Executor` => `ExecutionContext`
+              * `ExecutorService` => `ExecutionContext`
+            * `Future.apply` runs body function using `ExecutionContext`
+              * Wraps the body function in a `Runnable`
+              * Executes that `Runnable` on an `ExecutionContext`
+              * That `Runnable` completes a `Promise`
+            * `ExecutionContext.global`
+              * Tries to use `ForkJoinPool`
+              * Falls back to `ThreadPoolExecutor`
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### How to block `Future`/`ExecutionContext`
+
+            * `ExecutionContext` just wraps an `Executor`/`ExecutorService`
+            * `ExecutionContext.global` usually wraps either a `ForkJoinPool` or a `ThreadPoolExecutor`
+            * We already know [how to block those](#/how-to-block-thread-pool-executor)
+            * tldr function passed to `Future.apply` blocks the underlying thread, exhaust the pool
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### Solutions for blocked `Future`/`ExecutionContext`
+
+            <pre><code data-trim class="bash">
+java ... \
+     -Dscala.concurrent.context.minThreads=8 \
+     -Dscala.concurrent.context.numThreads=16 \
+     -Dscala.concurrent.context.maxThreads=24 \
+     ...
+            </code></pre>
+            <br/>
+            <pre><code data-trim class="scala">
+implicit val c = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(123))
+            </code></pre>
+            <br/>
+            <pre><code data-trim class="scala">
+implicit val defaultContext = ExecutionContext.global
+val databaseContext = ExecutionContext.fromExecutor(null)
+
+Future("default processing")
+Future("database operations")(databaseContext)
+            </code></pre>
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### Actors and Dispatchers
+
+            * `actor ! msg` 
+            * `msg` placed in actor''s `Mailbox` queue
+            * `Mailbox` is a `Runnable`
+            * `Mailbox` executed on dispatcher''s `ExecutorService`
+            * By default, all actors use the same default dispatcher
+          </script>
+        </section>
+
+        <section data-markdown id="how-to-block-actors">
+          <script type="text/template">
+            ### How to Block Actors
+
+            * Remember [how to block `Executor`](#/how-to-block-thread-pool-executor)? Do that.
+            * Block in `Actor.receive`
+            * Enough blocked actors will exhaust the dispatcher''s thread pool
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### Solutions for Blocked Actors
+
+            <pre><code data-trim>
+blocking2-dispatcher {
+  type = Dispatcher
+  executor = "fork-join-executor"
+}
+            </code></pre>
+
+            <pre><code data-trim class="scala">
+val blocking = system.actorOf(Props[BlockingActor]
+               .withRouter(FromConfig())
+               .withDispatcher("blocking2-dispatcher"), "blocking2")
+            </code></pre>
+            <br/>
+
+            <pre><code data-trim>
+my-dispatcher {
+  type = Dispatcher
+  executor = "fork-join-executor"
+  fork-join-executor {
+    parallelism-factor = 10.0
+    parallelism-max = 100
+  }
+}
+            </code></pre>
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### Fun Fact
+
+            `MessageDispatcher` is an `ExecutionContext`
+
+            <pre><code data-trim class="scala">
+val jdbcContext = system.dispatchers.lookup("jdbc-dispatcher")
+Future(useTheDatabase)(jdbcContext)
+            </code></pre>
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### Spray
+
+            * spray-io/akka-io: Java NIO + Actors
+            * spray-can: HTTP server & client built on spray-io
+            * spray-routing: HTTP request/response DSL
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### How to Block Spray
+
+            * Built on actors
+            * We know [how to block those](#/how-to-block-actors)
+            * `SimpleRoutingApp` uses a single actor to route all requests (!!!)
+            * That actor synchronously calls runRoute - easily blocked!
+            * That actor uses default Akka dispatcher - easily blocked!
+            * [Example code](https://github.com/zcox/spray-blocking-test)
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### Solutions for Blocking Spray
+
+            * Do not call blocking functions directly in routes
+              * Instead detach to `Future` or `Actor`
+              * Spray can complete a response using a `Future`
+            * Use separate dispatchers
+              * Give Spray its own dispatcher(s)
+              * Give your blocking code its own dispatcher(s)
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            ### Java NIO and spray-client
+
+            * Blocking I/O: One thread per socket
+            * Non-blocking I/O: One thread, many sockets
+            * No network I/O (web service client, database, etc) libraries use it!
+            * Except spray-client...
+            * Start writing [Scala web service clients using spray-can](http://www.meetup.com/ia-scala/events/134969972/)!
+            * Other protocols (TCP, SMTP, XMPP, various DBs, etc) can use [akka-io](http://doc.akka.io/docs/akka/2.3.0-RC2/scala/io.html)
+          </script>
+        </section>
+
+        <section data-markdown>
+          <script type="text/template">
+            # Banno is Hiring Scala Developers!
+
+            zach.cox@banno.com
+          </script>
+        </section>
+
+      </div>
+    </div>
+
+    <script src="lib/js/head.min.js"></script>
+    <script src="js/reveal.min.js"></script>
+
+    <script>
+
+      // Full list of configuration options available here:
+      // https://github.com/hakimel/reveal.js#configuration
+      Reveal.initialize({
+        width: 1024,
+        height: 768,
+        controls: true,
+        progress: true,
+        history: true,
+        center: true,
+
+        theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+        transition: Reveal.getQueryHash().transition || 'fade', // default/cube/page/concave/zoom/linear/fade/none
+
+        // Optional libraries used to extend on reveal.js
+        dependencies: [
+          { src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+          { src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+          { src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+          { src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+          { src: 'plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+          { src: 'plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }
+        ]
+      });
+
+    </script>
+
+  </body>
+</html>
