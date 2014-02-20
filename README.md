@@ -1,4 +1,6 @@
-# Quick Start
+You can [view this presentation on slideshare](http://www.slideshare.net/zacharycox/dont-block).
+
+## View presentation locally
 
  * Clone this repo
  * Install Node.js and Grunt
@@ -6,6 +8,10 @@
  * grunt serve
  * http://localhost:8000
  * Lean how easy it is to block things
+
+## Run the example code
+
+`sbt run`
 
 # reveal.js [![Build Status](https://travis-ci.org/hakimel/reveal.js.png?branch=master)](https://travis-ci.org/hakimel/reveal.js)
 
